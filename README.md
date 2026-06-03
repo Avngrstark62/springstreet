@@ -1,3 +1,9 @@
+# Frontend Deployed at [https://springstreet.vercel.app/](https://springstreet.vercel.app/)
+
+# Backend Deployed at [https://d4w33uyvhgoam.cloudfront.net](https://d4w33uyvhgoam.cloudfront.net)
+
+# Setup Instructions
+
 # Backend Setup
 
 ## Prerequisites
@@ -34,4 +40,14 @@ uv run alembic upgrade head
 
 ```bash
 uv run python main.py
+```
+
+# Frontend Setup
+- Node.js 18+
+- npm
+
+```bash
+cd frontend
+npm install
+npm run dev
 ```
