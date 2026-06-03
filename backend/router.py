@@ -30,6 +30,19 @@ def get_db():
     yield from database.session()
 
 
+def _resolve_product_identifier(db: Session, identifier: str):
+    try:
+        product_id = UUID(identifier)
+        product = database.get_product(db, product_id)
+    except ValueError:
+        product = database.get_product_by_slug(db, identifier)
+
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return product
+
+
 class CreateHoldingRequest(BaseModel):
     ticker: str
     weight: Decimal
@@ -125,20 +138,6 @@ def create_product(payload: CreateProductRequest, db: Session = Depends(get_db))
     return ProductResponse.model_validate(product, from_attributes=True)
 
 
-@router.get("/products/{product_id}", response_model=ProductResponse)
-def get_product(product_id: UUID, db: Session = Depends(get_db)) -> ProductResponse:
-    try:
-        product = database.get_product(db, product_id)
-        if product is None:
-            raise HTTPException(status_code=404, detail="Product not found")
-        return ProductResponse.model_validate(product, from_attributes=True)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        log_error(logger, "Get product failed", exc)
-        raise HTTPException(status_code=500, detail="Failed to get product")
-
-
 @router.get("/products/slug/{slug}", response_model=ProductResponse)
 def get_product_by_slug(slug: str, db: Session = Depends(get_db)) -> ProductResponse:
     try:
@@ -153,6 +152,18 @@ def get_product_by_slug(slug: str, db: Session = Depends(get_db)) -> ProductResp
         raise HTTPException(status_code=500, detail="Failed to get product by slug")
 
 
+@router.get("/products/{product_id}", response_model=ProductResponse)
+def get_product(product_id: str, db: Session = Depends(get_db)) -> ProductResponse:
+    try:
+        product = _resolve_product_identifier(db, product_id)
+        return ProductResponse.model_validate(product, from_attributes=True)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log_error(logger, "Get product failed", exc)
+        raise HTTPException(status_code=500, detail="Failed to get product")
+
+
 @router.get("/products", response_model=list[ProductResponse])
 def get_products(db: Session = Depends(get_db)) -> list[ProductResponse]:
     try:
@@ -164,13 +175,11 @@ def get_products(db: Session = Depends(get_db)) -> list[ProductResponse]:
 
 
 @router.get("/products/{product_id}/holdings", response_model=list[HoldingResponse])
-def get_product_holdings(product_id: UUID, db: Session = Depends(get_db)) -> list[HoldingResponse]:
+def get_product_holdings(product_id: str, db: Session = Depends(get_db)) -> list[HoldingResponse]:
     try:
-        product = database.get_product(db, product_id)
-        if product is None:
-            raise HTTPException(status_code=404, detail="Product not found")
+        product = _resolve_product_identifier(db, product_id)
 
-        holdings = database.get_holdings_for_product(db, product_id)
+        holdings = database.get_holdings_for_product(db, product.id)
         return [HoldingResponse.model_validate(holding, from_attributes=True) for holding in holdings]
     except HTTPException:
         raise
@@ -180,9 +189,10 @@ def get_product_holdings(product_id: UUID, db: Session = Depends(get_db)) -> lis
 
 
 @router.get("/products/{product_id}/factsheet", response_model=FactsheetResponse)
-def get_product_factsheet(product_id: UUID, db: Session = Depends(get_db)) -> FactsheetResponse:
+def get_product_factsheet(product_id: str, db: Session = Depends(get_db)) -> FactsheetResponse:
     try:
-        return build_factsheet_for_product(db, product_id)
+        product = _resolve_product_identifier(db, product_id)
+        return build_factsheet_for_product(db, product.id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
@@ -191,9 +201,10 @@ def get_product_factsheet(product_id: UUID, db: Session = Depends(get_db)) -> Fa
 
 
 @router.get("/products/{product_id}/performance", response_model=PerformanceResponse)
-def get_product_performance(product_id: UUID, db: Session = Depends(get_db)) -> PerformanceResponse:
+def get_product_performance(product_id: str, db: Session = Depends(get_db)) -> PerformanceResponse:
     try:
-        return build_performance_for_product(db, product_id)
+        product = _resolve_product_identifier(db, product_id)
+        return build_performance_for_product(db, product.id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
