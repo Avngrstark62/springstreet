@@ -163,22 +163,22 @@ class Database:
             updated_at=updated_at,
         )
 
-        with db.begin():
-            db.add(product)
-            # Ensure product row is written before holdings inserts.
-            db.flush()
-            for ticker, weight in holdings:
-                db.add(
-                    Holding(
-                        id=uuid4(),
-                        product_id=product_id,
-                        ticker=ticker,
-                        weight=weight,
-                        created_at=created_at,
-                        updated_at=updated_at,
-                    )
+        db.add(product)
+        # Ensure product row is written before holdings inserts.
+        db.flush()
+        for ticker, weight in holdings:
+            db.add(
+                Holding(
+                    id=uuid4(),
+                    product_id=product_id,
+                    ticker=ticker,
+                    weight=weight,
+                    created_at=created_at,
+                    updated_at=updated_at,
                 )
+            )
 
+        db.commit()
         db.refresh(product)
         return product
 

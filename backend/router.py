@@ -122,6 +122,7 @@ def create_product(payload: CreateProductRequest, db: Session = Depends(get_db))
             holdings=[(holding.ticker, holding.weight) for holding in payload.holdings],
         )
     except DuplicateSlugError as exc:
+        db.rollback()
         log_error(logger, "Create product failed: duplicate slug", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except IntegrityError as exc:
