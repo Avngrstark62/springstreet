@@ -2,12 +2,14 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db import DuplicateSlugError, database
+from etl_price_history import run as run_price_history_etl
+from etl_securities import run as run_securities_etl
 from factsheet_service import FactsheetResponse, build_factsheet_for_product
 from logger import get_logger, log_error
 from performance_service import PerformanceResponse, build_performance_for_product
@@ -24,6 +26,17 @@ def health() -> dict[str, str]:
         log_error(logger, "Health check failed", exc)
         raise HTTPException(status_code=503, detail="Database unavailable")
     return {"status": "ok"}
+
+
+@router.get("/sync-data", status_code=status.HTTP_204_NO_CONTENT)
+def sync_data() -> Response:
+    try:
+        run_securities_etl()
+        run_price_history_etl()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except Exception as exc:
+        log_error(logger, "Data sync failed", exc)
+        raise HTTPException(status_code=500, detail="Failed to sync data")
 
 
 def get_db():
