@@ -104,3 +104,9 @@ export async function getProductFactsheet(productId: string): Promise<FactsheetR
 export async function getProductPerformance(productId: string): Promise<PerformanceResponse> {
   return request<PerformanceResponse>(`/products/${productId}/performance`);
 }
+
+export function triggerSyncData(): void {
+  void fetch(`${API_BASE_URL}/sync-data`, { method: "GET" }).catch(() => {
+    // Intentionally ignore failures; sync trigger should not block UI behavior.
+  });
+}
