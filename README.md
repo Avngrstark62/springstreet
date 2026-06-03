@@ -3,6 +3,10 @@
 Frontend: [https://springstreet.vercel.app/](https://springstreet.vercel.app/)  
 Backend: [https://d4w33uyvhgoam.cloudfront.net](https://d4w33uyvhgoam.cloudfront.net)
 
+## Important Note
+
+After creating a new product, click the **Sync Data** button once so the required ticker data is refreshed and factsheet/performance data shows correctly. The button triggers the ETL pipelines immediately (securities first, then price history). If you skip this step, data will refresh only when the scheduled cron jobs run the next morning.
+
 ## Backend Setup
 
 ### Prerequisites
