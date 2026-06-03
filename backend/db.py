@@ -88,6 +88,22 @@ class Database:
             .all()
         )
 
+    def get_price_history_for_tickers(
+        self,
+        db: Session,
+        tickers: Sequence[str],
+        *,
+        start_date: date | None = None,
+    ) -> Sequence[PriceHistory]:
+        if not tickers:
+            return []
+
+        query = db.query(PriceHistory).filter(PriceHistory.ticker.in_(tickers))
+        if start_date is not None:
+            query = query.filter(PriceHistory.date >= start_date)
+
+        return query.order_by(PriceHistory.ticker.asc(), PriceHistory.date.asc()).all()
+
     # Products CRUD
     def get_product(self, db: Session, product_id: UUID) -> Product | None:
         return db.get(Product, product_id)
@@ -195,6 +211,18 @@ class Database:
     # Holdings CRUD
     def get_holdings_for_product(self, db: Session, product_id: UUID) -> Sequence[Holding]:
         return db.query(Holding).filter(Holding.product_id == product_id).all()
+
+    def get_holdings_with_securities(
+        self,
+        db: Session,
+        product_id: UUID,
+    ) -> Sequence[tuple[Holding, Security | None]]:
+        return (
+            db.query(Holding, Security)
+            .outerjoin(Security, Holding.ticker == Security.ticker)
+            .filter(Holding.product_id == product_id)
+            .all()
+        )
 
     def get_unique_holding_tickers(self, db: Session) -> list[str]:
         rows = db.query(Holding.ticker).distinct().all()

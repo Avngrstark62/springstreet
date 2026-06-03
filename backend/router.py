@@ -8,7 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db import DuplicateSlugError, database
+from factsheet_service import FactsheetResponse, build_factsheet_for_product
 from logger import get_logger, log_error
+from performance_service import PerformanceResponse, build_performance_for_product
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -175,3 +177,25 @@ def get_product_holdings(product_id: UUID, db: Session = Depends(get_db)) -> lis
     except Exception as exc:
         log_error(logger, "Get holdings failed", exc)
         raise HTTPException(status_code=500, detail="Failed to get holdings")
+
+
+@router.get("/products/{product_id}/factsheet", response_model=FactsheetResponse)
+def get_product_factsheet(product_id: UUID, db: Session = Depends(get_db)) -> FactsheetResponse:
+    try:
+        return build_factsheet_for_product(db, product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        log_error(logger, "Get factsheet failed", exc)
+        raise HTTPException(status_code=500, detail="Failed to get factsheet")
+
+
+@router.get("/products/{product_id}/performance", response_model=PerformanceResponse)
+def get_product_performance(product_id: UUID, db: Session = Depends(get_db)) -> PerformanceResponse:
+    try:
+        return build_performance_for_product(db, product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        log_error(logger, "Get performance failed", exc)
+        raise HTTPException(status_code=500, detail="Failed to get performance")
