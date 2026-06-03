@@ -3,75 +3,66 @@ import json
 import yfinance as yf
 
 
-def fetch_ticker_data(ticker: str) -> dict:
-    stock = yf.Ticker(ticker)
+def fetch_tickers_data(tickers: list[str]) -> dict:
+    result = {}
 
-    # Historical price data
-    history = stock.history(period="1mo")
-    history_json = json.loads(
-        history.reset_index().to_json(
-            orient="records",
-            date_format="iso"
-        )
+    # Fetch historical data for all tickers in one call
+    history_df = yf.download(
+        tickers=tickers,
+        period="1mo",
+        auto_adjust=False,
+        group_by="ticker",
+        progress=False,
     )
 
-    # Metadata
-    try:
-        info = stock.info
-    except Exception:
-        info = {}
+    for ticker in tickers:
+        # Metadata (still fetched per ticker)
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+        except Exception:
+            info = {}
 
-    metadata = {
-        "ticker": ticker,
-        "company_name": info.get("longName"),
-        "sector": info.get("sector"),
-        "industry": info.get("industry"),
-        "country": info.get("country"),
-        "market_cap": info.get("marketCap"),
-        "currency": info.get("currency"),
-        "exchange": info.get("exchange"),
-        "website": info.get("website"),
-        "employee_count": info.get("fullTimeEmployees"),
-    }
+        metadata = {
+            "ticker": ticker,
+            "company_name": info.get("longName"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "country": info.get("country"),
+            "market_cap": info.get("marketCap"),
+            "currency": info.get("currency"),
+            "exchange": info.get("exchange"),
+            "website": info.get("website"),
+            "employee_count": info.get("fullTimeEmployees"),
+        }
 
-    return {
-        "metadata": metadata,
-        "price_history": history_json,
-    }
+        # Extract this ticker's history from the bulk download
+        try:
+            ticker_history = history_df[ticker]
+            history_json = json.loads(
+                ticker_history.reset_index().to_json(
+                    orient="records",
+                    date_format="iso"
+                )
+            )
+        except Exception:
+            history_json = []
+
+        result[ticker] = {
+            "metadata": metadata,
+            "price_history": history_json,
+        }
+
+    return result
 
 
 if __name__ == "__main__":
-    ticker = "AAPL"
+    tickers = ["AAPL", "MSFT", "NVDA"]
 
     try:
-        data = fetch_ticker_data(ticker)
+        data = fetch_tickers_data(tickers)
 
-        print("\n=== METADATA ===\n")
-        print(json.dumps(data["metadata"], indent=2))
-
-        print("\n=== PRICE HISTORY ===\n")
-        print(json.dumps(data["price_history"], indent=2))
+        print(json.dumps(data, indent=2))
 
     except Exception as exc:
         print(f"Unexpected error: {exc}")
-
-# import json
-#
-# import yfinance as yf
-#
-#
-# def fetch_ticker_data() -> dict:
-#     ticker = "AAPL"  # Hardcoded ticker input
-#     stock = yf.Ticker(ticker)
-#
-#     history = stock.history(period="1mo")
-#     history_json = history.reset_index().to_json(orient="records", date_format="iso")
-#     return json.loads(history_json)
-#
-#
-# if __name__ == "__main__":
-#     try:
-#         data = fetch_ticker_data()
-#         print(json.dumps(data, indent=2))
-#     except Exception as exc:
-#         print(f"Unexpected error: {exc}")
