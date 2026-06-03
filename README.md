@@ -46,7 +46,15 @@ cd backend
 uv run python main.py
 ```
 
-## ETL Setup Instructions
+## Frontend Setup
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## ETL Setup
 
 Run both ETL scripts from the `backend` directory:
 
