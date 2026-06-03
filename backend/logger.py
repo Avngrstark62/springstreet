@@ -15,3 +15,8 @@ def _configure_logging() -> None:
 def get_logger(name: str) -> logging.Logger:
     _configure_logging()
     return logging.getLogger(name)
+
+
+def log_error(logger: logging.Logger, message: str, exc: Exception) -> None:
+    root_cause = getattr(exc, "orig", exc)
+    logger.error("%s: %s", message, root_cause)

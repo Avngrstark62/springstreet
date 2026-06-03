@@ -1,10 +1,11 @@
 from collections.abc import Generator, Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, TypedDict
 from uuid import UUID, uuid4
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,6 +15,28 @@ from models import Holding, PriceHistory, Product, Security
 
 class DuplicateSlugError(Exception):
     pass
+
+
+class SecurityRecord(TypedDict, total=False):
+    ticker: str
+    company_name: str | None
+    sector: str | None
+    industry: str | None
+    country: str | None
+    currency: str | None
+    exchange: str | None
+    market_cap: int | None
+    last_updated: datetime
+
+
+class PriceHistoryRecord(TypedDict, total=False):
+    ticker: str
+    date: date
+    open_price: Decimal | float | int | None
+    high_price: Decimal | float | int | None
+    low_price: Decimal | float | int | None
+    close_price: Decimal | float | int | None
+    volume: int | float | None
 
 
 class Database:
@@ -31,6 +54,7 @@ class Database:
             settings.database_url,
             pool_pre_ping=True,
             connect_args=connect_args,
+            hide_parameters=True,
         )
         self.session_local = sessionmaker(
             bind=self.engine,
@@ -55,38 +79,6 @@ class Database:
     def get_security(self, db: Session, ticker: str) -> Security | None:
         return db.get(Security, ticker)
 
-    def upsert_security(
-        self,
-        db: Session,
-        *,
-        ticker: str,
-        company_name: str | None = None,
-        sector: str | None = None,
-        industry: str | None = None,
-        country: str | None = None,
-        currency: str | None = None,
-        exchange: str | None = None,
-        market_cap: int | None = None,
-        last_updated: datetime,
-    ) -> Security:
-        security = db.get(Security, ticker)
-        if security is None:
-            security = Security(ticker=ticker)
-            db.add(security)
-
-        security.company_name = company_name
-        security.sector = sector
-        security.industry = industry
-        security.country = country
-        security.currency = currency
-        security.exchange = exchange
-        security.market_cap = market_cap
-        security.last_updated = last_updated
-
-        db.commit()
-        db.refresh(security)
-        return security
-
     # Price history CRUD
     def get_price_history(self, db: Session, ticker: str) -> Sequence[PriceHistory]:
         return (
@@ -95,33 +87,6 @@ class Database:
             .order_by(PriceHistory.date.desc())
             .all()
         )
-
-    def upsert_price_history(
-        self,
-        db: Session,
-        *,
-        ticker: str,
-        day: date,
-        open_price: Decimal | None = None,
-        high_price: Decimal | None = None,
-        low_price: Decimal | None = None,
-        close_price: Decimal | None = None,
-        volume: int | None = None,
-    ) -> PriceHistory:
-        record = db.get(PriceHistory, {"ticker": ticker, "date": day})
-        if record is None:
-            record = PriceHistory(ticker=ticker, date=day)
-            db.add(record)
-
-        record.open_price = open_price
-        record.high_price = high_price
-        record.low_price = low_price
-        record.close_price = close_price
-        record.volume = volume
-
-        db.commit()
-        db.refresh(record)
-        return record
 
     # Products CRUD
     def get_product(self, db: Session, product_id: UUID) -> Product | None:
@@ -230,6 +195,80 @@ class Database:
     # Holdings CRUD
     def get_holdings_for_product(self, db: Session, product_id: UUID) -> Sequence[Holding]:
         return db.query(Holding).filter(Holding.product_id == product_id).all()
+
+    def get_unique_holding_tickers(self, db: Session) -> list[str]:
+        rows = db.query(Holding.ticker).distinct().all()
+        return sorted(row[0] for row in rows if row[0])
+
+    def bulk_upsert_securities(self, db: Session, records: Sequence[SecurityRecord]) -> int:
+        now = datetime.utcnow()
+        values = [
+            {
+                "ticker": record["ticker"],
+                "company_name": record.get("company_name"),
+                "sector": record.get("sector"),
+                "industry": record.get("industry"),
+                "country": record.get("country"),
+                "currency": record.get("currency"),
+                "exchange": record.get("exchange"),
+                "market_cap": record.get("market_cap"),
+                "last_updated": record.get("last_updated") or now,
+            }
+            for record in records
+            if record.get("ticker")
+        ]
+        if not values:
+            return 0
+
+        stmt = insert(Security).values(values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[Security.ticker],
+            set_={
+                "company_name": stmt.excluded.company_name,
+                "sector": stmt.excluded.sector,
+                "industry": stmt.excluded.industry,
+                "country": stmt.excluded.country,
+                "currency": stmt.excluded.currency,
+                "exchange": stmt.excluded.exchange,
+                "market_cap": stmt.excluded.market_cap,
+                "last_updated": stmt.excluded.last_updated,
+            },
+        )
+        db.execute(stmt)
+        db.commit()
+        return len(values)
+
+    def bulk_upsert_price_history(self, db: Session, records: Sequence[PriceHistoryRecord]) -> int:
+        values = [
+            {
+                "ticker": record["ticker"],
+                "date": record["date"],
+                "open_price": record.get("open_price"),
+                "high_price": record.get("high_price"),
+                "low_price": record.get("low_price"),
+                "close_price": record.get("close_price"),
+                "volume": record.get("volume"),
+            }
+            for record in records
+            if record.get("ticker") and record.get("date") is not None
+        ]
+        if not values:
+            return 0
+
+        stmt = insert(PriceHistory).values(values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[PriceHistory.ticker, PriceHistory.date],
+            set_={
+                "open_price": stmt.excluded.open_price,
+                "high_price": stmt.excluded.high_price,
+                "low_price": stmt.excluded.low_price,
+                "close_price": stmt.excluded.close_price,
+                "volume": stmt.excluded.volume,
+            },
+        )
+        db.execute(stmt)
+        db.commit()
+        return len(values)
 
     def upsert_holding(
         self,

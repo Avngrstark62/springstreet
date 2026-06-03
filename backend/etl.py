@@ -57,7 +57,7 @@ def fetch_tickers_data(tickers: list[str]) -> dict:
 
 
 if __name__ == "__main__":
-    tickers = ["AAPL", "MSFT", "NVDA"]
+    tickers = ["AAPL", "MSFT", "NVDA", "CSK"]
 
     try:
         data = fetch_tickers_data(tickers)

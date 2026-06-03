@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db import DuplicateSlugError, database
-from logger import get_logger
+from logger import get_logger, log_error
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -18,8 +18,8 @@ logger = get_logger(__name__)
 def health() -> dict[str, str]:
     try:
         database.health_check()
-    except Exception:
-        logger.exception("Health check failed")
+    except Exception as exc:
+        log_error(logger, "Health check failed", exc)
         raise HTTPException(status_code=503, detail="Database unavailable")
     return {"status": "ok"}
 
@@ -107,17 +107,17 @@ def create_product(payload: CreateProductRequest, db: Session = Depends(get_db))
             holdings=[(holding.ticker, holding.weight) for holding in payload.holdings],
         )
     except DuplicateSlugError as exc:
-        logger.exception("Create product failed: duplicate slug")
+        log_error(logger, "Create product failed: duplicate slug", exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except IntegrityError as exc:
         db.rollback()
-        logger.exception("Create product failed due to integrity error")
+        log_error(logger, "Create product failed due to integrity error", exc)
         if "products_slug_key" in str(exc.orig):
             raise HTTPException(status_code=400, detail=f"Product with slug '{payload.slug}' already exists") from exc
         raise HTTPException(status_code=400, detail="Could not create product due to data constraints") from exc
-    except Exception:
+    except Exception as exc:
         db.rollback()
-        logger.exception("Create product failed")
+        log_error(logger, "Create product failed", exc)
         raise HTTPException(status_code=500, detail="Failed to create product")
 
     return ProductResponse.model_validate(product, from_attributes=True)
@@ -132,8 +132,8 @@ def get_product(product_id: UUID, db: Session = Depends(get_db)) -> ProductRespo
         return ProductResponse.model_validate(product, from_attributes=True)
     except HTTPException:
         raise
-    except Exception:
-        logger.exception("Get product failed")
+    except Exception as exc:
+        log_error(logger, "Get product failed", exc)
         raise HTTPException(status_code=500, detail="Failed to get product")
 
 
@@ -146,8 +146,8 @@ def get_product_by_slug(slug: str, db: Session = Depends(get_db)) -> ProductResp
         return ProductResponse.model_validate(product, from_attributes=True)
     except HTTPException:
         raise
-    except Exception:
-        logger.exception("Get product by slug failed")
+    except Exception as exc:
+        log_error(logger, "Get product by slug failed", exc)
         raise HTTPException(status_code=500, detail="Failed to get product by slug")
 
 
@@ -156,8 +156,8 @@ def get_products(db: Session = Depends(get_db)) -> list[ProductResponse]:
     try:
         products = database.get_products(db)
         return [ProductResponse.model_validate(product, from_attributes=True) for product in products]
-    except Exception:
-        logger.exception("Get products failed")
+    except Exception as exc:
+        log_error(logger, "Get products failed", exc)
         raise HTTPException(status_code=500, detail="Failed to get products")
 
 
@@ -172,6 +172,6 @@ def get_product_holdings(product_id: UUID, db: Session = Depends(get_db)) -> lis
         return [HoldingResponse.model_validate(holding, from_attributes=True) for holding in holdings]
     except HTTPException:
         raise
-    except Exception:
-        logger.exception("Get holdings failed")
+    except Exception as exc:
+        log_error(logger, "Get holdings failed", exc)
         raise HTTPException(status_code=500, detail="Failed to get holdings")
