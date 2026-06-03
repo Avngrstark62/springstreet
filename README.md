@@ -3,8 +3,6 @@
 Frontend: [https://springstreet.vercel.app/](https://springstreet.vercel.app/)  
 Backend: [https://d4w33uyvhgoam.cloudfront.net](https://d4w33uyvhgoam.cloudfront.net)
 
-## Setup Instructions
-
 ## Backend Setup
 
 ### Prerequisites
